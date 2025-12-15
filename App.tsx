@@ -6,6 +6,9 @@ import { AppState, GeneratedImage, GenerationState } from './types';
 import { enhancePrompt, generateImages } from './services/gemini';
 import { AlertCircle } from 'lucide-react';
 
+const STORAGE_KEY = 'imagine_ai_history_v1';
+const MAX_HISTORY_ITEMS = 10; // Limit to prevent localStorage quota issues
+
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     originalPrompt: '',
@@ -13,13 +16,52 @@ const App: React.FC = () => {
     generatedImages: [],
     status: GenerationState.IDLE,
     error: null,
-    selectedStyle: ''
+    selectedStyle: '',
+    aspectRatio: '1:1' // Default ratio
   });
 
-  // Load API key check (implicit since we use it in service, but good to handle errors UI wise)
+  // Load History on Mount
   useEffect(() => {
-    // If we wanted to check for key existence or show a banner
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setState(prev => ({ ...prev, generatedImages: parsed }));
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load history:', error);
+    }
   }, []);
+
+  // Save History on Change
+  useEffect(() => {
+    // Only save if we have images or if we explicitly cleared them (length 0)
+    // We use a small timeout to avoid blocking UI on large JSON stringify
+    const timeoutId = setTimeout(() => {
+      try {
+        if (state.generatedImages.length > 0) {
+          const historyToSave = state.generatedImages.slice(0, MAX_HISTORY_ITEMS);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(historyToSave));
+        } else {
+           // If array is empty, we might have cleared it
+           const saved = localStorage.getItem(STORAGE_KEY);
+           if (saved) localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch (error) {
+        console.warn('Failed to save history - likely quota exceeded:', error);
+        // Fallback: try saving just the last 2 if full
+        try {
+           if (state.generatedImages.length > 0) {
+             localStorage.setItem(STORAGE_KEY, JSON.stringify(state.generatedImages.slice(0, 2)));
+           }
+        } catch(e) {}
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [state.generatedImages]);
 
   const handleEnhance = async () => {
     if (!state.originalPrompt.trim()) return;
@@ -27,7 +69,7 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, status: GenerationState.ENHANCING, error: null }));
 
     try {
-      const response = await enhancePrompt(state.originalPrompt, state.selectedStyle);
+      const response = await enhancePrompt(state.originalPrompt, state.selectedStyle, state.aspectRatio);
       setState(prev => ({
         ...prev,
         enhancedPrompt: response.enhancedPrompt,
@@ -52,7 +94,8 @@ const App: React.FC = () => {
 
     try {
       // Generate 4 variations
-      const imageUrls = await generateImages(promptToUse, 4);
+      // Pass the selected aspect ratio as fallback if it's not detected in the prompt text
+      const imageUrls = await generateImages(promptToUse, 4, state.aspectRatio);
       
       if (imageUrls.length === 0) {
         throw new Error("No images were returned from the model.");
@@ -76,6 +119,18 @@ const App: React.FC = () => {
         status: GenerationState.ERROR,
         error: error.message || "Failed to generate images"
       }));
+    }
+  };
+
+  const handleReusePrompt = (prompt: string) => {
+    setState(prev => ({ ...prev, originalPrompt: prompt }));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleClearHistory = () => {
+    if (window.confirm('Clear all history? This cannot be undone.')) {
+      setState(prev => ({ ...prev, generatedImages: [] }));
+      localStorage.removeItem(STORAGE_KEY);
     }
   };
 
@@ -118,6 +173,8 @@ const App: React.FC = () => {
             setEnhancedPrompt={(val) => setState(prev => ({ ...prev, enhancedPrompt: val }))}
             selectedStyle={state.selectedStyle}
             setSelectedStyle={(val) => setState(prev => ({ ...prev, selectedStyle: val }))}
+            aspectRatio={state.aspectRatio}
+            setAspectRatio={(val) => setState(prev => ({ ...prev, aspectRatio: val }))}
             onGenerate={handleGenerate}
             onEnhance={handleEnhance}
             status={state.status}
@@ -129,6 +186,8 @@ const App: React.FC = () => {
           <ImageGrid 
             images={state.generatedImages} 
             isLoading={state.status === GenerationState.GENERATING}
+            onReusePrompt={handleReusePrompt}
+            onClearHistory={handleClearHistory}
           />
         </section>
       </main>

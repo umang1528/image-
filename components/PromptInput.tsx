@@ -1,6 +1,6 @@
 import React from 'react';
 import { Wand2, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { IMAGE_STYLES, GenerationState } from '../types';
+import { IMAGE_STYLES, ASPECT_RATIOS, GenerationState } from '../types';
 
 interface PromptInputProps {
   prompt: string;
@@ -9,6 +9,8 @@ interface PromptInputProps {
   setEnhancedPrompt: (value: string) => void;
   selectedStyle: string;
   setSelectedStyle: (value: string) => void;
+  aspectRatio: string;
+  setAspectRatio: (value: string) => void;
   onGenerate: () => void;
   onEnhance: () => void;
   status: GenerationState;
@@ -21,6 +23,8 @@ const PromptInput: React.FC<PromptInputProps> = ({
   setEnhancedPrompt,
   selectedStyle,
   setSelectedStyle,
+  aspectRatio,
+  setAspectRatio,
   onGenerate,
   onEnhance,
   status
@@ -43,20 +47,42 @@ const PromptInput: React.FC<PromptInputProps> = ({
         />
         
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3 border-t border-slate-800/50">
-            {/* Style Selector */}
+            {/* Options Selectors */}
             <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 no-scrollbar">
-              <span className="text-slate-500 text-sm whitespace-nowrap">Style:</span>
-              <select 
-                value={selectedStyle}
-                onChange={(e) => setSelectedStyle(e.target.value)}
-                className="bg-slate-800 text-slate-300 text-sm rounded-lg border-none px-3 py-1.5 focus:ring-2 focus:ring-indigo-500/50 outline-none cursor-pointer"
-                disabled={isBusy}
-              >
-                <option value="">Auto</option>
-                {IMAGE_STYLES.map(style => (
-                  <option key={style} value={style}>{style}</option>
-                ))}
-              </select>
+              
+              {/* Style Selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 text-xs font-medium uppercase tracking-wider">Style</span>
+                <select 
+                  value={selectedStyle}
+                  onChange={(e) => setSelectedStyle(e.target.value)}
+                  className="bg-slate-800 text-slate-300 text-sm rounded-lg border border-slate-700 px-3 py-1.5 focus:ring-2 focus:ring-indigo-500/50 outline-none cursor-pointer hover:bg-slate-750 transition-colors"
+                  disabled={isBusy}
+                >
+                  <option value="">Auto</option>
+                  {IMAGE_STYLES.map(style => (
+                    <option key={style} value={style}>{style}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="w-px h-6 bg-slate-800 mx-1 hidden sm:block"></div>
+
+              {/* Aspect Ratio Selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 text-xs font-medium uppercase tracking-wider">Ratio</span>
+                <select 
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.target.value)}
+                  className="bg-slate-800 text-slate-300 text-sm rounded-lg border border-slate-700 px-3 py-1.5 focus:ring-2 focus:ring-indigo-500/50 outline-none cursor-pointer hover:bg-slate-750 transition-colors"
+                  disabled={isBusy}
+                >
+                  {ASPECT_RATIOS.map(ratio => (
+                    <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
+                  ))}
+                </select>
+              </div>
+
             </div>
 
             {/* Action Buttons */}

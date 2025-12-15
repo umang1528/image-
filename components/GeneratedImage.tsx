@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Download, Maximize2, X } from 'lucide-react';
+import { Download, Maximize2, X, RotateCcw } from 'lucide-react';
 import { GeneratedImage as IGeneratedImage } from '../types';
 
 interface GeneratedImageProps {
   image: IGeneratedImage;
+  onReusePrompt: (prompt: string) => void;
 }
 
-const GeneratedImage: React.FC<GeneratedImageProps> = ({ image }) => {
+const GeneratedImage: React.FC<GeneratedImageProps> = ({ image, onReusePrompt }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const handleDownload = () => {
@@ -30,6 +31,13 @@ const GeneratedImage: React.FC<GeneratedImageProps> = ({ image }) => {
         {/* Overlay Actions */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
           <div className="flex gap-2 justify-end transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+            <button
+              onClick={() => onReusePrompt(image.prompt)}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
+              title="Reuse Prompt"
+            >
+              <RotateCcw className="w-5 h-5" />
+            </button>
             <button
               onClick={() => setIsFullscreen(true)}
               className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-colors"
@@ -64,13 +72,25 @@ const GeneratedImage: React.FC<GeneratedImageProps> = ({ image }) => {
             className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
           />
           
-          <button
-            onClick={handleDownload}
-            className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-medium shadow-lg transition-transform hover:scale-105"
-          >
-            <Download className="w-5 h-5" />
-            Download Original
-          </button>
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4">
+             <button
+               onClick={() => {
+                 setIsFullscreen(false);
+                 onReusePrompt(image.prompt);
+               }}
+               className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-full font-medium shadow-lg transition-transform hover:scale-105 border border-slate-700"
+             >
+               <RotateCcw className="w-5 h-5" />
+               Reuse Prompt
+             </button>
+             <button
+               onClick={handleDownload}
+               className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-medium shadow-lg transition-transform hover:scale-105"
+             >
+               <Download className="w-5 h-5" />
+               Download
+             </button>
+          </div>
         </div>
       )}
     </>

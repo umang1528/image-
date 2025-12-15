@@ -1,14 +1,16 @@
 import React from 'react';
 import { GeneratedImage as IGeneratedImage } from '../types';
 import GeneratedImage from './GeneratedImage';
-import { Layers } from 'lucide-react';
+import { Layers, Trash2 } from 'lucide-react';
 
 interface ImageGridProps {
   images: IGeneratedImage[];
   isLoading?: boolean;
+  onReusePrompt: (prompt: string) => void;
+  onClearHistory: () => void;
 }
 
-const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading }) => {
+const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading, onReusePrompt, onClearHistory }) => {
   if (images.length === 0 && !isLoading) {
     return (
       <div className="w-full py-20 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-3xl bg-slate-900/30">
@@ -24,9 +26,20 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading }) => {
        <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-slate-200 flex items-center gap-2">
             <span className="w-2 h-8 bg-indigo-500 rounded-full"></span>
-            Gallery
+            History & Gallery
           </h2>
-          <span className="text-sm text-slate-500">{images.length} Creations</span>
+          <div className="flex items-center gap-4">
+             <span className="text-sm text-slate-500">{images.length} Creations</span>
+             {images.length > 0 && (
+                <button 
+                  onClick={onClearHistory}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition-colors border border-red-500/20"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Clear History
+                </button>
+             )}
+          </div>
        </div>
 
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -42,7 +55,7 @@ const ImageGrid: React.FC<ImageGridProps> = ({ images, isLoading }) => {
 
          {/* Actual Images */}
          {images.map((img) => (
-           <GeneratedImage key={img.id} image={img} />
+           <GeneratedImage key={img.id} image={img} onReusePrompt={onReusePrompt} />
          ))}
        </div>
     </div>
