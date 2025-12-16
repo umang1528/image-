@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import PromptInput from './components/PromptInput';
 import ImageGrid from './components/ImageGrid';
-import { AppState, GeneratedImage, GenerationState } from './types';
+import { AppState, GeneratedImage, GenerationState, ReferenceImage } from './types';
 import { enhancePrompt, generateImages } from './services/gemini';
 import { AlertCircle } from 'lucide-react';
 
@@ -14,6 +14,7 @@ const App: React.FC = () => {
     originalPrompt: '',
     enhancedPrompt: '',
     generatedImages: [],
+    referenceImages: [],
     status: GenerationState.IDLE,
     error: null,
     selectedStyle: '',
@@ -37,21 +38,17 @@ const App: React.FC = () => {
 
   // Save History on Change
   useEffect(() => {
-    // Only save if we have images or if we explicitly cleared them (length 0)
-    // We use a small timeout to avoid blocking UI on large JSON stringify
     const timeoutId = setTimeout(() => {
       try {
         if (state.generatedImages.length > 0) {
           const historyToSave = state.generatedImages.slice(0, MAX_HISTORY_ITEMS);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(historyToSave));
         } else {
-           // If array is empty, we might have cleared it
            const saved = localStorage.getItem(STORAGE_KEY);
            if (saved) localStorage.removeItem(STORAGE_KEY);
         }
       } catch (error) {
         console.warn('Failed to save history - likely quota exceeded:', error);
-        // Fallback: try saving just the last 2 if full
         try {
            if (state.generatedImages.length > 0) {
              localStorage.setItem(STORAGE_KEY, JSON.stringify(state.generatedImages.slice(0, 2)));
@@ -64,12 +61,17 @@ const App: React.FC = () => {
   }, [state.generatedImages]);
 
   const handleEnhance = async () => {
-    if (!state.originalPrompt.trim()) return;
+    if (!state.originalPrompt.trim() && state.referenceImages.length === 0) return;
 
     setState(prev => ({ ...prev, status: GenerationState.ENHANCING, error: null }));
 
     try {
-      const response = await enhancePrompt(state.originalPrompt, state.selectedStyle, state.aspectRatio);
+      const response = await enhancePrompt(
+        state.originalPrompt, 
+        state.selectedStyle, 
+        state.aspectRatio,
+        state.referenceImages
+      );
       setState(prev => ({
         ...prev,
         enhancedPrompt: response.enhancedPrompt,
@@ -88,14 +90,19 @@ const App: React.FC = () => {
     // Use enhanced prompt if available, otherwise original
     const promptToUse = state.enhancedPrompt || state.originalPrompt;
     
-    if (!promptToUse.trim()) return;
+    if (!promptToUse.trim() && state.referenceImages.length === 0) return;
 
     setState(prev => ({ ...prev, status: GenerationState.GENERATING, error: null }));
 
     try {
       // Generate 4 variations
       // Pass the selected aspect ratio as fallback if it's not detected in the prompt text
-      const imageUrls = await generateImages(promptToUse, 4, state.aspectRatio);
+      const imageUrls = await generateImages(
+        promptToUse, 
+        4, 
+        state.aspectRatio,
+        state.referenceImages
+      );
       
       if (imageUrls.length === 0) {
         throw new Error("No images were returned from the model.");
@@ -132,6 +139,13 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, generatedImages: [] }));
       localStorage.removeItem(STORAGE_KEY);
     }
+  };
+  
+  const setReferenceImages = (images: ReferenceImage[] | ((prev: ReferenceImage[]) => ReferenceImage[])) => {
+      setState(prev => ({
+          ...prev,
+          referenceImages: typeof images === 'function' ? images(prev.referenceImages) : images
+      }));
   };
 
   return (
@@ -175,6 +189,8 @@ const App: React.FC = () => {
             setSelectedStyle={(val) => setState(prev => ({ ...prev, selectedStyle: val }))}
             aspectRatio={state.aspectRatio}
             setAspectRatio={(val) => setState(prev => ({ ...prev, aspectRatio: val }))}
+            referenceImages={state.referenceImages}
+            setReferenceImages={setReferenceImages}
             onGenerate={handleGenerate}
             onEnhance={handleEnhance}
             status={state.status}

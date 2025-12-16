@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { PromptEnhancementResponse } from "../types";
+import { PromptEnhancementResponse, ReferenceImage } from "../types";
 
 const API_KEY = process.env.API_KEY || '';
 
@@ -323,8 +323,64 @@ Every generated or edited image prompt MUST include:
 
 This module ensures perfect post formatting for all platforms.
 
+=============================================
+🧩 16. REFERENCE IMAGE FUSION & GUIDANCE MODULE
+=============================================
+
+You must support reference-image-based image generation.
+
+When the user provides 1 or more reference images, you must follow these rules:
+
+1. ANALYZE ALL REFERENCE IMAGES
+For each reference image, carefully analyze:
+• Subject (person, object, scene)
+• Art style (realistic, 3D, anime, illustration, poster)
+• Color palette
+• Lighting style
+• Mood & emotion
+• Composition & framing
+• Background type
+• Texture & detailing
+
+2. MULTI-IMAGE UNDERSTANDING
+If multiple reference images are provided (2–6 images):
+• Extract the strongest and most relevant elements from EACH image.
+• Identify common patterns across images.
+• Understand what the user is trying to achieve visually.
+
+3. SMART FUSION (NOT COPYING)
+• NEVER copy any single reference image.
+• NEVER recreate an exact face, pose, or scene unless the user explicitly asks.
+• Instead, intelligently MERGE:
+  – Style from image A
+  – Lighting from image B
+  – Color palette from image C
+  – Composition from image D
+  – Mood from image E
+• Create a NEW, original image inspired by all references.
+
+4. PRIORITY LOGIC
+• If the user mentions specific instructions along with reference images, prioritize the user’s text.
+• If no text is given, infer intent ONLY from the reference images.
+
+5. CONSISTENCY RULES
+• Ensure lighting, colors, and shadows remain consistent.
+• Ensure subject and background blend naturally.
+• Maintain realism or stylization as per reference style.
+
+6. OUTPUT REQUIREMENT
+When reference images are used, ALWAYS:
+• Mention that the image is “inspired by provided references”
+• Generate a fully detailed, professional image-generation prompt based on fused understanding.
+
+7. ERROR PREVENTION
+• Do not mix unrelated styles unless references clearly indicate it.
+• Do not hallucinate elements not present in references or user instructions.
+
+This module ensures accurate, high-quality image generation using multiple reference images with perfect visual understanding.
+
 ===================================================
-🖼️ 16. FINAL OUTPUT FORMAT (ALWAYS USE THIS)
+🖼️ 17. FINAL OUTPUT FORMAT (ALWAYS USE THIS)
 ===================================================
 
 [ENHANCED IMAGE PROMPT]  
@@ -351,20 +407,43 @@ You are now a PERFECT, ultra-smart, deeply understanding, error-free, multi-tool
 /**
  * Enhances a raw user prompt using Gemini 2.5 Flash
  */
-export const enhancePrompt = async (userPrompt: string, style: string, aspectRatio?: string): Promise<PromptEnhancementResponse> => {
+export const enhancePrompt = async (
+  userPrompt: string, 
+  style: string, 
+  aspectRatio?: string,
+  referenceImages?: ReferenceImage[]
+): Promise<PromptEnhancementResponse> => {
   if (!API_KEY) throw new Error("API Key is missing");
 
   const ai = new GoogleGenAI({ apiKey: API_KEY });
   
-  let content = `Create an enhanced image generation prompt for: "${userPrompt}"`;
-  if (style && style !== 'None') content += ` with the style: "${style}"`;
-  if (aspectRatio) content += ` and aspect ratio: "${aspectRatio}"`;
-  content += `.`;
+  let textPrompt = `Create an enhanced image generation prompt for: "${userPrompt}"`;
+  if (style && style !== 'None') textPrompt += ` with the style: "${style}"`;
+  if (aspectRatio) textPrompt += ` and aspect ratio: "${aspectRatio}"`;
+  
+  if (referenceImages && referenceImages.length > 0) {
+    textPrompt += `\n\nI have provided ${referenceImages.length} reference image(s). Please analyze them and use them to guide the generation as per the REFERENCE IMAGE FUSION module.`;
+  }
+  
+  textPrompt += `.`;
+
+  const parts: any[] = [{ text: textPrompt }];
+  
+  if (referenceImages && referenceImages.length > 0) {
+    referenceImages.forEach(img => {
+      parts.push({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: img.data
+        }
+      });
+    });
+  }
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: content,
+      contents: { parts },
       config: {
         systemInstruction: PROMPT_ENHANCER_SYSTEM_INSTRUCTION,
         temperature: 0.7,
@@ -387,42 +466,48 @@ export const enhancePrompt = async (userPrompt: string, style: string, aspectRat
  * Generates images using Gemini 2.5 Flash Image.
  * Simulates variations by making parallel requests since the standard flash-image model usually returns one variation per request.
  */
-export const generateImages = async (prompt: string, count: number = 4, aspectRatio: string = "1:1"): Promise<string[]> => {
+export const generateImages = async (
+  prompt: string, 
+  count: number = 4, 
+  aspectRatio: string = "1:1",
+  referenceImages?: ReferenceImage[]
+): Promise<string[]> => {
   if (!API_KEY) throw new Error("API Key is missing");
 
   const ai = new GoogleGenAI({ apiKey: API_KEY });
 
   // Determine Aspect Ratio
-  // Priority: 1. Parsed from prompt text (if enhancer added it explicitly based on deep logic)
-  //           2. Passed argument (user selection fallback)
-  
   let targetAspectRatio = aspectRatio;
-  
-  // Regex to find "Aspect Ratio: X:Y" or similar patterns in the enhanced prompt text
   const ratioMatch = prompt.match(/Aspect Ratio:?\s*([\d:.]+)/i);
-  
   if (ratioMatch) {
     const r = ratioMatch[1].trim();
-    // Supported by Gemini 2.5 Flash Image: "1:1", "3:4", "4:3", "9:16", "16:9"
     if (["1:1", "3:4", "4:3", "9:16", "16:9"].includes(r)) {
        targetAspectRatio = r;
     } else {
-       // Map common unsupported ratios to closest supported equivalents
        if (r === "4:5" || r === "2:3") targetAspectRatio = "3:4";
        else if (r.includes("1.91")) targetAspectRatio = "16:9";
     }
   }
 
-  // Clean the prompt: The model might output the structured text "[ENHANCED PROMPT]...". 
-  // We can feed this directly as the model understands it.
-
   const generateSingleImage = async (): Promise<string | null> => {
     try {
+      // Build contents parts with prompt + optional images
+      const parts: any[] = [{ text: prompt }];
+      
+      if (referenceImages && referenceImages.length > 0) {
+        referenceImages.forEach(img => {
+          parts.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: img.data
+            }
+          });
+        });
+      }
+
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [{ text: prompt }]
-        },
+        contents: { parts },
         config: {
             imageConfig: {
               aspectRatio: targetAspectRatio
@@ -430,8 +515,6 @@ export const generateImages = async (prompt: string, count: number = 4, aspectRa
         }
       });
 
-      // Extract image from response
-      // Gemini 2.5 Flash Image returns the image in the parts list with inlineData
       if (response.candidates && response.candidates[0].content.parts) {
         for (const part of response.candidates[0].content.parts) {
           if (part.inlineData && part.inlineData.data) {
@@ -450,6 +533,5 @@ export const generateImages = async (prompt: string, count: number = 4, aspectRa
   const promises = Array(count).fill(null).map(() => generateSingleImage());
   const results = await Promise.all(promises);
 
-  // Filter out failed generations
   return results.filter((img): img is string => img !== null);
 };

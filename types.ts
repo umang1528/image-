@@ -5,6 +5,13 @@ export interface GeneratedImage {
   timestamp: number;
 }
 
+export interface ReferenceImage {
+  id: string;
+  data: string; // base64
+  mimeType: string;
+  previewUrl: string;
+}
+
 export interface PromptEnhancementResponse {
   enhancedPrompt: string;
   rawResponse: string;
@@ -22,6 +29,7 @@ export interface AppState {
   originalPrompt: string;
   enhancedPrompt: string;
   generatedImages: GeneratedImage[];
+  referenceImages: ReferenceImage[];
   status: GenerationState;
   error: string | null;
   selectedStyle: string;
